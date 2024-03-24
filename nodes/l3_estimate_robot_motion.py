@@ -48,6 +48,10 @@ class WheelOdom:
         self.last_enc_r = None
         self.last_time = None
 
+        self.x = 0
+        self.y = 0
+        self.theta = 0
+
         # rosbag
         rospack = rospkg.RosPack()
         path = rospack.get_path("rob521_lab3")
@@ -72,22 +76,48 @@ class WheelOdom:
             self.last_enc_l = sensor_state_msg.left_encoder
             self.last_enc_r = sensor_state_msg.right_encoder
             self.last_time = sensor_state_msg.header.stamp
+
         else:
             # update calculated pose and twist with new data
             le = sensor_state_msg.left_encoder
             re = sensor_state_msg.right_encoder
-
+            current_time = sensor_state_msg.header.stamp
             # # YOUR CODE HERE!!!
             # Update your odom estimates with the latest encoder measurements and populate the relevant area
             # of self.pose and self.twist with estimated position, heading and velocity
+            del_t = (current_time - self.last_time).to_sec()
+            del_le = (le - self.last_enc_l) * RAD_PER_TICK
+            del_re = (re - self.last_enc_l) * RAD_PER_TICK
+            
+            prev_pos = np.array([self.x,
+                                 self.y,
+                                 self.theta
+            ])
+            pose_update_mat = np.array([
+                (del_le + del_re) * np.cos(self.theta),
+                (del_le + del_re) * np.sin(self.theta),
+                (del_le - del_re) / BASELINE
+            ])
+            new_pos = prev_pos + ((WHEEL_RADIUS / 2) * pose_update_mat)
 
-            # self.pose.position.x = xx
-            # self.pose.position.y = xx
-            # self.pose.orientation = xx
+            x_dot = (new_pos[0] - self.x) / del_t
+            # y_dot = (new_pos[1] - self.y) / del_t
+            theta_dot = (new_pos[2] - self.theta) / del_t
 
-            # self.twist.linear.x = mu_dot[0].item()
-            # self.twist.linear.y = mu_dot[1].item()
-            # self.twist.angular.z = mu_dot[2].item()
+            self.x = new_pos[0]
+            self.y = new_pos[1]
+            self.theta = new_pos[2]
+            self.last_time = current_time
+            self.last_enc_l = le
+            self.last_enc_r = re
+
+            self.pose.position.x = self.x
+            self.pose.position.y = self.y
+            self.pose.orientation = ros_quat_from_euler((0, 0, self.theta))
+
+            self.twist.linear.x = x_dot
+            self.twist.linear.y = 0
+            self.twist.angular.z = theta_dot
 
             # publish the updates as a topic and in the tf tree
             current_time = rospy.Time.now()

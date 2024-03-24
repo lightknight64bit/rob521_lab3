@@ -94,6 +94,22 @@ class OccupancyGripMap:
 
         # YOUR CODE HERE!!! Loop through each measurement in scan_msg to get the correct angle and
         # x_start and y_start to send to your ray_trace_update function.
+        
+        # scan_msgs.ranges is a list of 360
+        downsampled_range = scan_msg.ranges[::SCAN_DOWNSAMPLE]
+        upper = scan_msg.range_max
+        lower = scan_msg.range_min
+        x_start = odom_map[0] / CELL_SIZE
+        y_start = odom_map[1] / CELL_SIZE
+        for i,rang in enumerate(downsampled_range):
+            if lower < rang < upper:
+                range_mes = rang / CELL_SIZE
+                angle = odom_map[2] + scan_msg.angle_increment * i * SCAN_DOWNSAMPLE
+                self.np_map, self.log_odds = self.ray_trace_update(self.np_map,
+                                                                   self.log_odds,
+                                                                   x_start, y_start,
+                                                                   angle,
+                                                                   range_mes)
 
         # publish the message
         self.map_msg.info.map_load_time = rospy.Time.now()
@@ -116,6 +132,31 @@ class OccupancyGripMap:
         # ray_trace and the equations from class. Your numpy map must be an array of int8s with 0 to 100 representing
         # probability of occupancy, and -1 representing unknown.
 
+        cos_angle = np.cos(angle)
+        sin_angle = np.sin(angle)
+        x_start = x_start.astype(int)
+        y_start = y_start.astype(int)
+        x_end = (x_start + range_mes * cos_angle).astype(int)
+        y_end = (y_start + range_mes * sin_angle).astype(int)
+        x_occup = (x_end + NUM_PTS_OBSTACLE * cos_angle).astype(int)
+        y_occup = (y_end + NUM_PTS_OBSTACLE * sin_angle).astype(int)
+
+        line_filter = lambda row, col : (row >= 0) & (row < map.shape[0]) & (col >= 0) & (col < map.shape[1])
+        
+        rr, cc = ray_trace(y_start, x_start, y_end, x_end)
+        filter = line_filter(rr, cc)
+        rr = rr[filter]; cc = cc[filter]
+        
+        rr_occup, cc_occup = ray_trace(y_end, x_end, y_occup, x_occup)
+        filter = line_filter(rr_occup, cc_occup)
+        rr_occup = rr_occup[filter]; cc_occup = cc_occup[filter]
+        
+        log_odds[rr, cc] -= BETA
+        log_odds[rr_occup, cc_occup] += ALPHA
+        probs = self.log_odds_to_probability(log_odds)
+        map[rr, cc] = (probs[rr, cc] * 100).astype(np.uint8)
+        map[rr_occup, cc_occup] = (probs[rr_occup, cc_occup] * 100).astype(np.uint8)
+        
         return map, log_odds
 
     def log_odds_to_probability(self, values):

@@ -8,7 +8,7 @@ from std_msgs.msg import Empty
 from geometry_msgs.msg import Twist
 
 INT32_MAX = 2**31
-NUM_ROTATIONS = 3 
+NUM_ROTATIONS = 3
 TICKS_PER_ROTATION = 4096
 WHEEL_RADIUS = 0.066 / 2 #In meters
 
@@ -76,9 +76,10 @@ class wheelBaselineEstimator():
 
             # # YOUR CODE HERE!!!
             # Calculate the radius of the wheel based on encoder measurements
-
-            # separation = ##
-            # print('Calibrated Separation: {} m'.format(separation))
+            left_angle = (self.del_left_encoder * 2 * np.pi) / TICKS_PER_ROTATION
+            right_angle = (self.del_right_encoder * 2 * np.pi) / TICKS_PER_ROTATION
+            separation = (2 *  WHEEL_RADIUS / 2) * ((abs(right_angle - left_angle)) / (NUM_ROTATIONS * 2 * np.pi))
+            print('Calibrated Separation: {} m'.format(separation))
 
             #Reset the robot and calibration routine
             self.lock.acquire()

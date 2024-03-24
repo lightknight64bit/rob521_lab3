@@ -8,7 +8,7 @@ from std_msgs.msg import Empty
 from geometry_msgs.msg import Twist
 
 INT32_MAX = 2**31
-DRIVEN_DISTANCE = 0.75 #in meters
+DRIVEN_DISTANCE = 1 #in meters
 TICKS_PER_ROTATION = 4096
 
 class wheelRadiusEstimator():
@@ -44,13 +44,13 @@ class wheelRadiusEstimator():
         elif diff > np.int64(INT32_MAX) - 1: #Underflowed
             delPhi = (INT32_MAX + a) + (INT32_MAX - 1 - b) + 1
         else:
-            delPhi = b - a  
+            delPhi = b - a
         return delPhi
 
     def sensorCallback(self, msg):
         #Retrieve the encoder data form the sensor state msg
         self.lock.acquire()
-        if self.left_encoder_prev is None or self.left_encoder_prev is None: 
+        if self.left_encoder_prev is None or self.right_encoder_prev is None: 
             self.left_encoder_prev = msg.left_encoder #int32
             self.right_encoder_prev = msg.right_encoder #int32
         else:
@@ -72,12 +72,13 @@ class wheelRadiusEstimator():
 
         elif self.isMoving is True and np.isclose(input_velocity_mag, 0):
             self.isMoving = False #Set the state to stopped
-
             # # YOUR CODE HERE!!!
             # Calculate the radius of the wheel based on encoder measurements
-
-            # radius = ##
-            # print('Calibrated Radius: {} m'.format(radius))
+            left_angle = (self.del_left_encoder * 2 * np.pi) / TICKS_PER_ROTATION
+            right_angle = (self.del_right_encoder * 2 * np.pi) / TICKS_PER_ROTATION
+            print(f"Left: {left_angle} | Right: {right_angle}")
+            radius = 2 * DRIVEN_DISTANCE / ((left_angle + right_angle))
+            print('Calibrated Radius: {} m'.format(np.round(radius, 6)))
 
             #Reset the robot and calibration routine
             self.lock.acquire()
