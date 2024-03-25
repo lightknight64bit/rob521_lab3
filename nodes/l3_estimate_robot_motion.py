@@ -50,7 +50,7 @@ class WheelOdom:
 
         self.x = 0
         self.y = 0
-        self.theta = 0
+        self.theta = self.pose.orientation.z
 
         # rosbag
         rospack = rospkg.RosPack()
@@ -76,7 +76,6 @@ class WheelOdom:
             self.last_enc_l = sensor_state_msg.left_encoder
             self.last_enc_r = sensor_state_msg.right_encoder
             self.last_time = sensor_state_msg.header.stamp
-
         else:
             # update calculated pose and twist with new data
             le = sensor_state_msg.left_encoder
@@ -93,27 +92,30 @@ class WheelOdom:
                                  self.y,
                                  self.theta
             ])
+
             pose_update_mat = np.array([
                 (del_le + del_re) * np.cos(self.theta),
                 (del_le + del_re) * np.sin(self.theta),
-                (del_le - del_re) / BASELINE
+                (del_re - del_le) / BASELINE
             ])
             new_pos = prev_pos + ((WHEEL_RADIUS / 2) * pose_update_mat)
-
+            new_pos[2] = np.arctan2(np.sin(new_pos[2]),np.cos(new_pos[2]))
+            
             x_dot = (new_pos[0] - self.x) / del_t
-            # y_dot = (new_pos[1] - self.y) / del_t
+            y_dot = (new_pos[1] - self.y) / del_t
             theta_dot = (new_pos[2] - self.theta) / del_t
 
             self.x = new_pos[0]
             self.y = new_pos[1]
             self.theta = new_pos[2]
+            
             self.last_time = current_time
             self.last_enc_l = le
             self.last_enc_r = re
 
             self.pose.position.x = self.x
             self.pose.position.y = self.y
-            self.pose.orientation = ros_quat_from_euler((0, 0, self.theta))
+            self.pose.orientation.z = self.theta
 
             self.twist.linear.x = x_dot
             self.twist.linear.y = 0
@@ -133,13 +135,13 @@ class WheelOdom:
             self.bag.write('odom_est', self.wheel_odom)
 
             # for testing against actual odom
-            # print("Wheel Odom: x: %2.3f, y: %2.3f, t: %2.3f" % (
-            #     self.pose.position.x, self.pose.position.y, mu[2].item()
-            # ))
-            # print("Turtlebot3 Odom: x: %2.3f, y: %2.3f, t: %2.3f" % (
-            #     self.odom.pose.pose.position.x, self.odom.pose.pose.position.y,
-            #     euler_from_ros_quat(self.odom.pose.pose.orientation)[2]
-            # ))
+            print("Wheel Odom: x: %2.3f, y: %2.3f, t: %2.3f" % (
+                self.pose.position.x, self.pose.position.y, self.theta
+            ))
+            print("Turtlebot3 Odom: x: %2.3f, y: %2.3f, t: %2.3f" % (
+                self.odom.pose.pose.position.x, self.odom.pose.pose.position.y,
+                euler_from_ros_quat(self.odom.pose.pose.orientation)[2]
+            ))
 
     def odom_cb(self, odom_msg):
         # get odom from turtlebot3 packages
