@@ -86,7 +86,7 @@ class WheelOdom:
             # of self.pose and self.twist with estimated position, heading and velocity
             del_t = (current_time - self.last_time).to_sec()
             del_le = (le - self.last_enc_l) * RAD_PER_TICK
-            del_re = (re - self.last_enc_l) * RAD_PER_TICK
+            del_re = (re - self.last_enc_r) * RAD_PER_TICK
             
             prev_pos = np.array([self.x,
                                  self.y,
