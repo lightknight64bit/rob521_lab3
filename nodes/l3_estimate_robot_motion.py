@@ -46,7 +46,11 @@ class WheelOdom:
         self.twist = Twist()
         self.last_enc_l = None
         self.last_enc_r = None
-        self.last_time = None
+        self.last_time = 0
+        self.last_x = 0
+        self.last_y = 0
+        self.theta = self.pose.orientation.z
+
 
         # rosbag
         rospack = rospkg.RosPack()
@@ -71,23 +75,48 @@ class WheelOdom:
         if self.last_enc_l is None:
             self.last_enc_l = sensor_state_msg.left_encoder
             self.last_enc_r = sensor_state_msg.right_encoder
-            self.last_time = sensor_state_msg.header.stamp
+            self.last_time = sensor_state_msg.header.stamp.secs
         else:
             # update calculated pose and twist with new data
             le = sensor_state_msg.left_encoder
             re = sensor_state_msg.right_encoder
+            self.time = sensor_state_msg.header.stamp.secs
 
             # # YOUR CODE HERE!!!
             # Update your odom estimates with the latest encoder measurements and populate the relevant area
             # of self.pose and self.twist with estimated position, heading and velocity
+            angle_l = (le - self.last_enc_l)*RAD_PER_TICK
+            angle_r = (re - self.last_enc_r)*RAD_PER_TICK
+            self.theta += angle_r - angle_l
+            if self.theta > np.pi:
+                self.theta = -2*np.pi+self.theta
+            
 
-            # self.pose.position.x = xx
-            # self.pose.position.y = xx
-            # self.pose.orientation = xx
+            a = np.array([[WHEEL_RADIUS*np.cos(self.theta)/2, WHEEL_RADIUS*np.cos(self.theta)/2],
+            [WHEEL_RADIUS*np.sin(self.theta)/2, WHEEL_RADIUS*np.sin(self.theta)/2],
+            [WHEEL_RADIUS*BASELINE/2, -1*WHEEL_RADIUS*BASELINE/2]])
+            
+            b = np.array([[angle_l], [angle_r]])
+            
+            mu_t = np.array([[self.last_x], [self.last_y], [self.theta]])
+            mu_t_h = mu_t + np.matmul(a, b)
 
-            # self.twist.linear.x = mu_dot[0].item()
-            # self.twist.linear.y = mu_dot[1].item()
-            # self.twist.angular.z = mu_dot[2].item()
+
+            self.pose.position.x = mu_t_h[0].item()
+            self.pose.position.y = mu_t_h[1].item()
+            self.pose.orientation.z = mu_t_h[2].item()
+            
+            mu_dot = (mu_t_h - mu_t)/(self.time - self.last_time)
+
+            self.twist.linear.x = mu_dot[0].item()
+            self.twist.linear.y = mu_dot[1].item()
+            self.twist.angular.z = mu_dot[2].item()
+
+             
+            self.last_x = self.pose.position.x
+            self.last_y = self.pose.position.y
+            self.last_theta = self.pose.orientation
+            
 
             # publish the updates as a topic and in the tf tree
             current_time = rospy.Time.now()
@@ -110,6 +139,9 @@ class WheelOdom:
             #     self.odom.pose.pose.position.x, self.odom.pose.pose.position.y,
             #     euler_from_ros_quat(self.odom.pose.pose.orientation)[2]
             # ))
+            self.last_enc_l = le
+            self.last_enc_r = re
+            self.last_time = self.time
 
     def odom_cb(self, odom_msg):
         # get odom from turtlebot3 packages
